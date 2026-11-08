@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gia Hạn Key Script - 6H / Tối đa 72H</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121212; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { background: #1e1e1e; padding: 30px; border-radius: 10px; width: 340px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        h2 { color: #2ecc71; margin-bottom: 20px; }
+        input { width: 100%; padding: 10px; margin-bottom: 15px; background: #2c2c2c; border: 1px solid #444; color: #fff; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #3498db; border: none; color: #fff; font-weight: bold; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #2980b9; }
+        #msg { margin-top: 15px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>Gia Hạn Key (6H)</h2>
+        <input type="text" id="keyInput" placeholder="Dán key của bạn vào đây...">
+        <button onclick="renewKey()">Xác Nhận Gia Hạn</button>
+        <div id="msg"></div>
+    </div>
+
+    <script>
+        // Thông tin JSONBin của nhóm bạn
+        const BIN_ID = "6ae87b89ffd5d160539f5130";
+        const API_KEY = "$2a$10$lJ1oODybr9hD2PKZaN578O7tWbgqnDyRuQxCBdnwRtQANbYOXZp.y";
+
+        async function renewKey() {
+            const inputKey = document.getElementById('keyInput').value.trim();
+            const msg = document.getElementById('msg');
+
+            if (!inputKey) {
+                msg.style.color = "#e74c3c";
+                msg.innerText = "Vui lòng nhập key!";
+                return;
+            }
+
+            msg.style.color = "#f39c12";
+            msg.innerText = "Đang kết nối hệ thống...";
+
+            try {
+                // 1. Lấy dữ liệu mới nhất từ JSONBin
+                const getRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                    headers: { "X-Master-Key": API_KEY }
+                });
+                const getData = await getRes.json();
+                let keysList = (getData.record && getData.record.keys) ? getData.record.keys : [];
+
+                // 2. Tìm key trong danh sách
+                let foundIndex = -1;
+                for (let i = 0; i < keysList.length; i++) {
+                    let item = keysList[i];
+                    let kVal = (typeof item === 'object' && item !== null) ? item.key : item;
+                    if (kVal === inputKey) {
+                        foundIndex = i;
+                        break;
+                    }
+                }
+
+                if (foundIndex === -1) {
+                    msg.style.color = "#e74c3c";
+                    msg.innerText = "❌ Key không tồn tại trên hệ thống!";
+                    return;
+                }
+
+                // Chuẩn hóa cấu trúc key thành object nếu trước đó chỉ lưu chuỗi đơn thuần
+                let keyObj = keysList[foundIndex];
+                if (typeof keyObj !== 'object' || keyObj === null) {
+                    keyObj = { key: inputKey, owner: null, expiresAt: Date.now() };
+                }
+
+                let now = Date.now();
+                let maxAllowedTime = now + (72 * 60 * 60 * 1000); // Giới hạn trần 72 giờ từ hiện tại
+
+                // Tính toán thời gian hết hạn sau khi cộng 6 tiếng (Cộng dồn)
+                let baseTime = Math.max(keyObj.expiresAt || now, now);
+                let newExpireTime = baseTime + (6 * 60 * 60 * 1000);
+
+                // Kiểm tra giới hạn 72 giờ
+                if (newExpireTime > maxAllowedTime) {
+                    msg.style.color = "#e74c3c";
+                    msg.innerText = "⚠️ Key đã đạt giới hạn tối đa (72 giờ)! Chưa thể gia hạn thêm.";
+                    return;
+                }
+
+                // Cập nhật thời gian hạn mới
+                keyObj.expiresAt = newExpireTime;
+                keysList[foundIndex] = keyObj;
+
+                // 3. Đẩy ngược dữ liệu đã cập nhật lên JSONBin (PUT request)
+                const putRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Master-Key": API_KEY
+                    },
+                    body: JSON.stringify({ keys: keysList })
+                });
+
+                if (putRes.ok) {
+                    msg.style.color = "#2ecc71";
+                    let hoursLeft = Math.ceil((newExpireTime - now) / (60 * 60 * 1000));
+                    msg.innerText = `✅ Gia hạn thành công! Tổng thời gian còn lại khoảng ${hoursLeft} giờ.`;
+                } else {
+                    msg.style.color = "#e74c3c";
+                    msg.innerText = "Lỗi khi lưu dữ liệu lên hệ thống!";
+                }
+
+            } catch (err) {
+                msg.style.color = "#e74c3c";
+                msg.innerText = "Lỗi kết nối mạng!";
+            }
+        }
+    </script>
+</body>
+</html>
